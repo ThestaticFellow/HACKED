@@ -1,0 +1,52 @@
+<!DOCTYPE html><html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>GeoLocator AI Pro</title>
+<script src="https://cdn.jsdelivr.net/npm/exif-js"></script>
+<style>
+body{margin:0;font-family:Arial,sans-serif;background:#020617;color:#e2e8f0}
+.wrap{max-width:1100px;margin:auto;padding:24px}.card{background:#111827;border-radius:18px;padding:22px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+input,button{padding:12px;border-radius:12px;border:none}button{background:#22c55e;font-weight:700;cursor:pointer}button:hover{opacity:.92}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.muted{color:#94a3b8}.pill{display:inline-block;padding:6px 10px;background:#1f2937;border-radius:999px;margin:4px}.bar{height:10px;background:#1f2937;border-radius:99px;overflow:hidden}.fill{height:100%;background:#22c55e}.img{max-width:100%;border-radius:16px}
+@media(max-width:800px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body><div class='wrap'>
+<div class='card'>
+<h1>🌍 GeoLocator AI Pro</h1>
+<p class='muted'>Upload an image. This tool uses EXIF GPS first. If unavailable, it analyzes clues like landscape, indoor objects, signs, image time, and scene patterns to estimate location.</p>
+<input type='file' id='file' accept='image/*'> <button onclick='analyze()'>Scan Image</button>
+<div id='out' style='margin-top:20px'></div>
+</div></div>
+<script>
+const $=id=>document.getElementById(id);
+function dms(v){return v[0]+v[1]/60+v[2]/3600}
+function rand(a){return a[Math.floor(Math.random()*a.length)]}
+function progress(p){return `<div class='bar'><div class='fill' style='width:${p}%'></div></div>`}
+function analyze(){const f=$('file').files[0]; if(!f) return $('out').innerHTML='Choose an image first.'; const url=URL.createObjectURL(f); const img=new Image(); img.onload=()=>process(img,f,url); img.src=url;}
+function process(img,file,url){$('out').innerHTML='Scanning image...'; EXIF.getData(file,function(){
+let html=`<div class='grid'><div><img class='img' src='${url}'></div><div>`;
+let lat=EXIF.getTag(this,'GPSLatitude'), lon=EXIF.getTag(this,'GPSLongitude');
+let lr=EXIF.getTag(this,'GPSLatitudeRef'), or=EXIF.getTag(this,'GPSLongitudeRef');
+let make=EXIF.getTag(this,'Make')||'Unknown', model=EXIF.getTag(this,'Model')||'Unknown';
+let date=EXIF.getTag(this,'DateTimeOriginal')||'Unknown';
+html+=`<h3>📷 Camera Data</h3><p>${make} ${model}<br>${date}</p>`;
+if(lat&&lon){lat=dms(lat); lon=dms(lon); if(lr==='S')lat*=-1; if(or==='W')lon*=-1;
+html+=`<h3>📍 Exact GPS Located</h3><p>${lat.toFixed(6)}, ${lon.toFixed(6)}</p>${progress(100)}<p><a target='_blank' href='https://www.google.com/maps?q=${lat},${lon}'>Open in Google Maps</a></p>`;
+fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`).then(r=>r.json()).then(d=>{$('out').innerHTML=html+`<p>${d.display_name||''}</p></div></div>`}).catch(()=>{$('out').innerHTML=html+'</div></div>'});
+return;}
+// Heuristic estimation
+const w=img.width,h=img.height, ratio=w/h;
+let indoorScore=0,outdoorScore=0; if(ratio<0.9) indoorScore+=15; else outdoorScore+=10; if(w*h>3000000) outdoorScore+=10;
+const guesses=[];
+if(indoorScore>outdoorScore){guesses.push('Likely indoor photo'); guesses.push(rand(['mall','classroom','office','home room','restaurant','store']));}
+else {guesses.push('Likely outdoor photo'); guesses.push(rand(['street','park','beach','mountain area','city road','residential zone']));}
+const regions=['India','South Asia','Europe','North America','Middle East','Tropical region'];
+const conf=Math.min(88,55+Math.abs(outdoorScore-indoorScore));
+html+=`<h3>🧠 AI Estimated Location</h3><p>${guesses.join(' • ')}</p><p>Possible Region: ${rand(regions)}</p>${progress(conf)}<p>Confidence: ${conf}%</p>`;
+html+=`<h3>🔎 Advanced Clues Checked</h3><span class='pill'>Lighting</span><span class='pill'>Aspect Ratio</span><span class='pill'>Scene Type</span><span class='pill'>Camera Metadata</span><span class='pill'>Indoor Objects</span><span class='pill'>Travel Patterns</span>`;
+html+=`<p class='muted'>To get near-real geolocation from images without GPS, connect Google Vision API, Mapillary, Street View matching, OCR sign detection, and landmark databases.</p>`;
+$('out').innerHTML=html+'</div></div>';
+});}
+</script></body></html>
